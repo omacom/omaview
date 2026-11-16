@@ -140,9 +140,28 @@ ApplicationWindow {
     // by a tiling compositor or by a hand resizing it, keeps that: asked to
     // change, a tiled one would shrink and then snap back.
     property size asked: Qt.size(960, 540)
-    readonly property bool managed: visible && (Math.abs(width - asked.width) > 2 || Math.abs(height - asked.height) > 2)
+    readonly property bool managed: visible && !reshaping
+                                    && (Math.abs(width - asked.width) > 2 || Math.abs(height - asked.height) > 2)
+    // A window on screen is reshaped by the compositor, which Hyprland has to
+    // do itself. Until the new size comes, nothing is drawn, rather than the
+    // next file at its new size clipped to the old one.
+    property bool reshaping: false
+    readonly property bool reshaped: Math.abs(width - asked.width) <= 2 && Math.abs(height - asked.height) <= 2
+    onReshapedChanged: if (reshaped) reshaping = false
+    Timer {
+        id: reshapeTimer
+        interval: 400
+        onTriggered: win.reshaping = false
+    }
     function ask(w, h) {
+        if (Math.abs(width - w) <= 2 && Math.abs(height - h) <= 2)
+            return
         asked = Qt.size(w, h)
+        if (visible && backend.reshapeWindow(asked)) {
+            reshaping = true
+            reshapeTimer.restart()
+            return
+        }
         width = w
         height = h
     }
@@ -162,7 +181,12 @@ ApplicationWindow {
         if ((sized && !backend.isPicture) || fullscreen || gridShown || !backend.hasMedia || backend.error !== "")
             return
         if (backend.isPicture) {
-            if (pictureView.ready)
+            // Its header says its shape before it's decoded, so the window is
+            // ready for it when it is.
+            const size = backend.pictureSize, turned = backend.rotation % 180 !== 0
+            if (size.width > 0 && size.height > 0)
+                sizeTo(turned ? size.height : size.width, turned ? size.width : size.height)
+            else if (pictureView.ready)
                 sizeTo(pictureView.turnedWidth, pictureView.turnedHeight)
         } else if (backend.hasVideo && backend.videoSize.width > 0) {
             sizeTo(backend.videoSize.width, backend.videoSize.height)
@@ -196,6 +220,7 @@ ApplicationWindow {
     Connections {
         target: backend
         function onVideoSizeChanged() { win.sizeToMedia() }
+        function onPictureChanged() { win.sizeToMedia() }
         function onDurationChanged() { win.sizeToMedia() }
         function onStatusChanged() { win.sizeToMedia() }
         function onPictureCleared() {
@@ -387,7 +412,7 @@ ApplicationWindow {
         Loader {
             id: videoLoader
             anchors.fill: parent
-            visible: !backend.isPicture
+            visible: !backend.isPicture && !win.reshaping
             active: backend.playerReady
             sourceComponent: VideoOutput {
                 objectName: "video"
@@ -406,7 +431,7 @@ ApplicationWindow {
         PictureView {
             id: pictureView
             anchors.fill: parent
-            visible: win.picture && backend.error === ""
+            visible: win.picture && backend.error === "" && !win.reshaping
             animated: backend.animated
             vector: backend.vector
             transparent: backend.transparent

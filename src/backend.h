@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "frames.h"
+#include "hyprland.h"
 #include "picture.h"
 #include "positions.h"
 #include "probe.h"
@@ -159,6 +160,8 @@ public:
     Q_INVOKABLE void open(const QStringList &arguments);
     Q_INVOKABLE void openUrls(const QList<QUrl> &urls);
     Q_INVOKABLE void openDialog();
+    // Asks the compositor to give the window this size; false when it can't.
+    Q_INVOKABLE bool reshapeWindow(QSize size) { return hyprland::reshape(size); }
     Q_INVOKABLE void togglePlay();
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
