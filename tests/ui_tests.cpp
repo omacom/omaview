@@ -386,7 +386,9 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(preview->property("frame").toInt() >= 2, 20000);
         QTest::keyClick(w->window, Qt::Key_Escape);
         QTRY_VERIFY(!w->window->property("gridShown").toBool());
-        // The controls' grid button opens it too.
+        // The controls' grid button opens it too, clicked once the window
+        // has taken the video's shape, so the click lands where it was aimed.
+        QTRY_VERIFY(w->window->property("sized").toBool() && w->window->property("reshaped").toBool());
         QQuickItem *gridButton = nullptr;
         QTRY_VERIFY([&] {
             std::function<QQuickItem *(QQuickItem *)> visible = [&](QQuickItem *item) -> QQuickItem * {
