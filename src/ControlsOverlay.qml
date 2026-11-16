@@ -13,8 +13,10 @@ Item {
     property bool fullscreen: false
     property Item picture
     // Narrow windows keep what matters most: play, the time, fullscreen.
-    readonly property bool roomy: width >= 760
-    readonly property bool medium: width >= 560
+    // Everything medium adds needs about 670px, and roomy's volume and
+    // audio track another 180, with room to spare for a wider font.
+    readonly property bool roomy: width >= 900
+    readonly property bool medium: width >= 720
 
     Rectangle {
         anchors.left: parent.left

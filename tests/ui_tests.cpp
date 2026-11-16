@@ -780,3 +780,4 @@ private slots:
 
 QTEST_MAIN(UiTests)
 #include "ui_tests.moc"
+
