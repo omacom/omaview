@@ -354,6 +354,9 @@ private slots:
         // until a tile is picked.
         w->backend->open({QFileInfo(m_clip).absolutePath()});
         QTRY_VERIFY(w->window->property("gridShown").toBool());
+        // At the size of its tiles: as many 240px ones across as fit in 80% of
+        // the 800px test screen, two, and as tall as its two files' one row.
+        QTRY_COMPARE(w->window->size(), QSize(8 + 2 * 248, 16 + 188));
         QTRY_VERIFY_WITH_TIMEOUT(w->backend->playerReady(), 10000);
         QTest::qWait(1000);
         QVERIFY(!w->backend->playing());

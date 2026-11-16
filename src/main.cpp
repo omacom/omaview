@@ -85,8 +85,10 @@ int main(int argc, char *argv[]) {
     // A local video or song is measured first too, so the window opens at
     // its shape rather than at a default and then changing.
     const QUrl firstUrl = files.isEmpty() ? QUrl() : QUrl::fromUserInput(files.first(), QDir::currentPath(), QUrl::AssumeLocalFile);
-    const bool measure = !picture && firstUrl.isLocalFile() && !QFileInfo(firstUrl.toLocalFile()).isDir();
-    engine.setInitialProperties({{"opening", !files.isEmpty()}, {"holding", picture || measure}});
+    const bool folder = firstUrl.isLocalFile() && QFileInfo(firstUrl.toLocalFile()).isDir();
+    const bool measure = !picture && !folder && firstUrl.isLocalFile();
+    // A folder opens on its grid, at the size of its tiles, once it's listed.
+    engine.setInitialProperties({{"opening", !files.isEmpty()}, {"holding", picture || measure || folder}});
     engine.addImageProvider("thumbnail", new ThumbnailProvider);
     engine.load(QUrl("qrc:/Main.qml"));
     if (engine.rootObjects().isEmpty())

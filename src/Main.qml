@@ -201,6 +201,22 @@ ApplicationWindow {
         const side = Math.max(minimumHeight, Math.min(520, Screen.desktopAvailableHeight * 0.6))
         ask(side, side)
     }
+    // A folder's grid opens as wide as its tiles, up to as many as fit across
+    // 80% of the screen, and as tall as its rows, in whole rows, up to 80% of
+    // its height, so a small folder's is just its tiles. The tiles are laid
+    // out as MediaGrid lays them: 4:3, with a gap around each.
+    function sizeGrid() {
+        if (fullscreen || managed)
+            return
+        const gap = 8, tile = gridTileSize, row = Math.round(tile * 3 / 4) + gap
+        const maxWidth = Screen.desktopAvailableWidth * 0.8, maxHeight = Screen.desktopAvailableHeight * 0.8
+        const fit = Math.max(1, Math.floor((maxWidth - gap) / (tile + gap)))
+        const columns = Math.min(fit, Math.max(1, backend.playlistCount))
+        const rows = Math.min(Math.max(1, Math.floor((maxHeight - 2 * gap) / row)),
+                              Math.max(1, Math.ceil(backend.playlistCount / columns)))
+        ask(Math.max(minimumWidth, gap + columns * (tile + gap)), Math.max(minimumHeight, 2 * gap + rows * row))
+    }
+
     // Started with a video or a song, measured before the window shows.
     function openAt(naturalWidth, naturalHeight, song) {
         if (naturalWidth > 0 && naturalHeight > 0)
@@ -227,9 +243,16 @@ ApplicationWindow {
             if (videoLoader.item)
                 videoLoader.item.clearOutput()
         }
-        function onFolderOpened() { win.gridShown = true }
+        function onFolderOpened() {
+            win.gridShown = true
+            win.sizeGrid()
+            win.holding = false
+        }
         function onNotice(text) { win.showMessage(text) }
-        function onNothingToOpen() { win.opening = false }
+        function onNothingToOpen() {
+            win.opening = false
+            win.holding = false
+        }
         function onErrorChanged() {
             if (backend.error !== "")
                 win.holding = false
