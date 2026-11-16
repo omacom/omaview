@@ -42,8 +42,6 @@ class CommandLineTests(unittest.TestCase):
         result = run("--help", home=self.home)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("info <file>", result.stdout)
-        result = run("--version", home=self.home)
-        self.assertEqual(result.stdout.strip(), "omaview 0.1.0")
 
     def test_info_as_json(self):
         result = run("info", self.clip, "--json", home=self.home)

@@ -14,7 +14,6 @@
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QUrl>
-#include <cstdio>
 
 #include "backend.h"
 #include "cli.h"
@@ -28,24 +27,19 @@
 
 int main(int argc, char *argv[]) {
     // QGuiApplication aborts without a display before it has seen its
-    // arguments, so commands, --help and --version decide that first.
+    // arguments, so commands and --help decide that first.
     const QByteArray first = argc > 1 ? QByteArray(argv[1]) : QByteArray();
     const bool command = isCliCommand(QString::fromLocal8Bit(first));
-    const bool helpOrVersion = first == "--help" || first == "-h" || first == "--version" || first == "-v";
-    if (command || helpOrVersion)
+    const bool help = first == "--help" || first == "-h";
+    if (command || help)
         qputenv("QT_QPA_PLATFORM", "offscreen");
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("omaview");
-    app.setApplicationVersion("0.1.0");
 
     if (command)
         return runCli(app.arguments());
-    if (first == "--version" || first == "-v") {
-        fprintf(stdout, "omaview %s\n", qPrintable(app.applicationVersion()));
-        return 0;
-    }
-    if (helpOrVersion)
+    if (help)
         return runCli({app.arguments().first(), "help"});
 
     // Matches the window to omaview.desktop, so the compositor (Wayland
