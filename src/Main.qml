@@ -587,7 +587,8 @@ ApplicationWindow {
         }
 
         // The thin line, which grows into a timeline when the pointer comes
-        // to the bottom edge or a key seeks.
+        // to the bottom edge or a key seeks. Fullscreen, there's no line, only
+        // the timeline when the pointer comes.
         Item {
             id: bottomEdge
             visible: win.playable && !win.overlayShown
@@ -607,6 +608,7 @@ ApplicationWindow {
             Timeline {
                 id: bareTimeline
                 objectName: "progressLine"
+                visible: expanded || !win.fullscreen
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom

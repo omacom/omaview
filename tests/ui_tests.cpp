@@ -234,6 +234,17 @@ private slots:
         QTest::keyClick(w->window, Qt::Key_Space);
         QTRY_VERIFY(!w->backend->playing());
 
+        // Bare, the thin line runs along the bottom, but not fullscreen.
+        w->window->setProperty("overlayShown", false);
+        auto *line = find<QQuickItem>(w.get(), "progressLine");
+        QTRY_VERIFY(line->isVisible());
+        w->window->showFullScreen();
+        QTRY_VERIFY(w->window->property("fullscreen").toBool());
+        QVERIFY(!line->isVisible());
+        w->window->showNormal();
+        QTRY_VERIFY(line->isVisible());
+        w->window->setProperty("overlayShown", true);
+
         // Speed and volume say what they became.
         auto *levelValue = find<QQuickItem>(w.get(), "levelValue");
         QTest::keyClick(w->window, Qt::Key_BracketRight);
