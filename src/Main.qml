@@ -143,8 +143,8 @@ ApplicationWindow {
     readonly property bool managed: visible && !reshaping
                                     && (Math.abs(width - asked.width) > 2 || Math.abs(height - asked.height) > 2)
     // A window on screen is reshaped by the compositor, which Hyprland has to
-    // do itself. Until the new size comes, nothing is drawn, rather than the
-    // next file at its new size clipped to the old one.
+    // do itself. Until the new size comes, the last picture stays, and a
+    // video draws nothing, rather than the next file in the last one's shape.
     property bool reshaping: false
     readonly property bool reshaped: Math.abs(width - asked.width) <= 2 && Math.abs(height - asked.height) <= 2
     onReshapedChanged: if (reshaped) reshaping = false
@@ -181,8 +181,11 @@ ApplicationWindow {
         if ((sized && !backend.isPicture) || fullscreen || gridShown || !backend.hasMedia || backend.error !== "")
             return
         if (backend.isPicture) {
-            // Its header says its shape before it's decoded, so the window is
-            // ready for it when it is.
+            // Once it's decoded, out of sight, so the picture shows in the
+            // same frame as the window takes its shape; its header says what
+            // that shape is.
+            if (!nextPictureDecoded())
+                return
             const size = backend.pictureSize, turned = backend.rotation % 180 !== 0
             if (size.width > 0 && size.height > 0)
                 sizeTo(turned ? size.height : size.width, turned ? size.width : size.height)
@@ -193,6 +196,12 @@ ApplicationWindow {
         } else if (!backend.hasVideo && !backend.loading && backend.duration > 0) {
             sizeSquare()
         }
+    }
+    function nextPictureDecoded() {
+        return backend.vector || backend.animated
+            || (backend.pictureSource.toString() !== ""
+                && nextPicture.source.toString() === backend.pictureSource.toString()
+                && (nextPicture.status === Image.Ready || nextPicture.status === Image.Error))
     }
     function sizeSquare() {
         sized = true
@@ -236,7 +245,6 @@ ApplicationWindow {
     Connections {
         target: backend
         function onVideoSizeChanged() { win.sizeToMedia() }
-        function onPictureChanged() { win.sizeToMedia() }
         function onDurationChanged() { win.sizeToMedia() }
         function onStatusChanged() { win.sizeToMedia() }
         function onPictureCleared() {
@@ -454,7 +462,7 @@ ApplicationWindow {
         PictureView {
             id: pictureView
             anchors.fill: parent
-            visible: win.picture && backend.error === "" && !win.reshaping
+            visible: win.picture && backend.error === ""
             animated: backend.animated
             vector: backend.vector
             transparent: backend.transparent
@@ -471,15 +479,45 @@ ApplicationWindow {
             }
             onFailed: backend.pictureFailed()
         }
-        // The last picture stays until the next one's header has been read,
-        // so stepping through a folder never flashes black; a video between
-        // them lets it go, so it can't show for a moment after.
-        Binding {
-            target: pictureView
-            property: "source"
-            value: backend.pictureSource
-            when: !win.picture || backend.pictureSource.toString() !== ""
-            restoreMode: Binding.RestoreNone
+        // The next picture decodes out of sight, as the window takes its
+        // shape, and the view takes it from Qt's cache once both are done:
+        // the last picture stays until then, so stepping through a folder
+        // never flashes black, nor shows a picture in the last one's shape.
+        // A video between them lets it go, so it can't show for a moment after.
+        Image {
+            id: nextPicture
+            visible: false
+            asynchronous: true
+            autoTransform: true
+            source: win.picture && !backend.vector && !backend.animated ? backend.pictureSource : ""
+        }
+        function showPicture() {
+            if (!win.picture) {
+                pictureView.source = ""
+                return
+            }
+            // The window is asked for the picture's shape first.
+            win.sizeToMedia()
+            const source = backend.pictureSource
+            if (source.toString() === "" || win.reshaping)
+                return
+            if (!win.nextPictureDecoded())
+                return
+            pictureView.source = source
+        }
+        Connections {
+            target: nextPicture
+            function onStatusChanged() { root.showPicture() }
+            function onSourceChanged() { root.showPicture() }
+        }
+        Connections {
+            target: win
+            function onReshapingChanged() { root.showPicture() }
+            function onPictureChanged() { root.showPicture() }
+        }
+        Connections {
+            target: backend
+            function onPictureChanged() { root.showPicture() }
         }
 
         // A song: its cover and its name.
