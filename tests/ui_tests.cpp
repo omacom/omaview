@@ -532,9 +532,12 @@ private slots:
         QTest::keyClick(w->window, Qt::Key_Right);
         QCOMPARE(w->backend->fileName(), QString("2-shell.jpg"));
         QTRY_COMPARE(view->property("naturalWidth").toDouble(), 900.0);
+        // The window takes each picture's shape, a tall one after a wide one.
+        QTRY_COMPARE(qRound(w->window->height() * 900.0 / w->window->width()), 1200);
         QTest::keyClick(w->window, Qt::Key_R);
         QCOMPARE(w->backend->rotation(), 90);
         QCOMPARE(view->property("turnedWidth").toDouble(), 1200.0);
+        QTRY_COMPARE(qRound(w->window->width() * 900.0 / w->window->height()), 1200);
         QTest::keyClick(w->window, Qt::Key_Tab);
         QTRY_VERIFY(find<QQuickItem>(w.get(), "overlay")->property("item").value<QQuickItem *>());
         shot(w.get(), "11-picture-overlay");

@@ -134,23 +134,32 @@ ApplicationWindow {
 
     // The window opens at the picture's or the video's shape, as large as
     // fits in 80% of the screen, and never larger than the picture itself; a
-    // song gets a small square for its cover. It keeps that size as the next
-    // file comes, rather than jumping about. A window the compositor has
-    // already given a size of its own, as a tiling one does, keeps it: asked
-    // to change, it would shrink and then snap back.
-    readonly property bool managed: visible && (width !== 960 || height !== 540)
+    // song gets a small square for its cover. Each file that comes after
+    // reshapes it the same way, so a tall picture doesn't leave a wide one
+    // boxed in its shape. A window given a size other than the one asked for,
+    // by a tiling compositor or by a hand resizing it, keeps that: asked to
+    // change, a tiled one would shrink and then snap back.
+    property size asked: Qt.size(960, 540)
+    readonly property bool managed: visible && (Math.abs(width - asked.width) > 2 || Math.abs(height - asked.height) > 2)
+    function ask(w, h) {
+        asked = Qt.size(w, h)
+        width = w
+        height = h
+    }
     function sizeTo(naturalWidth, naturalHeight) {
         sized = true
         if (managed)
             return
         const maxWidth = Screen.desktopAvailableWidth * 0.8, maxHeight = Screen.desktopAvailableHeight * 0.8
         const scale = Math.min(1, maxWidth / naturalWidth, maxHeight / naturalHeight)
-        width = Math.max(minimumWidth, Math.round(naturalWidth * scale))
-        height = Math.max(minimumHeight, Math.round(naturalHeight * scale))
+        ask(Math.max(minimumWidth, Math.round(naturalWidth * scale)),
+            Math.max(minimumHeight, Math.round(naturalHeight * scale)))
     }
     function sizeToMedia() {
-        // A folder's first file, behind its grid, waits until it is picked.
-        if (sized || fullscreen || gridShown || !backend.hasMedia || backend.error !== "")
+        // A folder's first file, behind its grid, waits until it is picked. A
+        // picture's shape is known only once it's decoded, and changes as
+        // it turns, so a picture fits each time it does.
+        if ((sized && !backend.isPicture) || fullscreen || gridShown || !backend.hasMedia || backend.error !== "")
             return
         if (backend.isPicture) {
             if (pictureView.ready)
@@ -163,8 +172,10 @@ ApplicationWindow {
     }
     function sizeSquare() {
         sized = true
-        if (!managed)
-            width = height = Math.max(minimumHeight, Math.min(520, Screen.desktopAvailableHeight * 0.6))
+        if (managed)
+            return
+        const side = Math.max(minimumHeight, Math.min(520, Screen.desktopAvailableHeight * 0.6))
+        ask(side, side)
     }
     // Started with a video or a song, measured before the window shows.
     function openAt(naturalWidth, naturalHeight, song) {
@@ -200,6 +211,8 @@ ApplicationWindow {
         }
         function onMediaChanged() {
             win.opening = false
+            // Each file takes the window to its own shape.
+            win.sized = false
             // A file opened from elsewhere, Ctrl+O or a drop, shows rather than
             // playing behind the grid; a folder opens its grid again after.
             win.gridShown = false
@@ -400,6 +413,9 @@ ApplicationWindow {
             vectorSize: backend.pictureSize
             turn: backend.rotation
             onZoomChanged: win.poke()
+            // Once both sides have turned, not in between.
+            onTurnedWidthChanged: Qt.callLater(win.sizeToMedia)
+            onTurnedHeightChanged: Qt.callLater(win.sizeToMedia)
             onReadyChanged: {
                 win.sizeToMedia()
                 if (ready)
