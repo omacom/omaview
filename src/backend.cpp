@@ -291,8 +291,10 @@ void Backend::ensurePlayer() {
                 return;
             QSize size;
             bool upright = false;
+            quint64 generation;
             {
                 QMutexLocker locker(&m_frameLock);
+                generation = m_generation;
                 m_frame = frame;
                 if (frame.size() != m_frameSize) {
                     size = m_frameSize = frame.size();
@@ -316,7 +318,9 @@ void Backend::ensurePlayer() {
                     m_output->setVideoFrame(frame);
             }
             if (size.isValid())
-                QMetaObject::invokeMethod(this, [this, size, upright]() mutable {
+                QMetaObject::invokeMethod(this, [this, size, upright, generation]() mutable {
+                    if (generation != m_generation)
+                        return;
                     if (upright && m_videoTurned)
                         size.transpose();
                     if (size != m_videoSize) {
@@ -487,7 +491,6 @@ void Backend::resetFile() {
     if (m_cancel)
         *m_cancel = true;
     m_cancel = std::make_shared<std::atomic_bool>(false);
-    ++m_generation;
     m_title.clear();
     m_artist.clear();
     m_coverArt.clear();
@@ -499,8 +502,11 @@ void Backend::resetFile() {
     // hasVideo stays as the player has it: Qt says only when it changes, so a
     // second video after a first would never say so again. onStatus() syncs
     // it once the new file has loaded.
+    // Under the frame's lock, so a frame from the last file is measured as
+    // the last file's, and its size, still on its way, is dropped.
     {
         QMutexLocker locker(&m_frameLock);
+        ++m_generation;
         m_frame = QVideoFrame();
         m_frameSize = QSize();
     }
