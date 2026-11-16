@@ -609,6 +609,22 @@ private slots:
         close(w);
     }
 
+    void aFolderOfOneFitsItsTile() {
+        const QString lone = m_dir.filePath("one");
+        QVERIFY(QDir().mkpath(lone));
+        QVERIFY(QProcess::execute("ffmpeg", {"-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=640x480",
+                                             "-frames:v", "1", lone + "/only.png"}) == 0);
+        auto w = open(m_dir.filePath("one-state"));
+        QVERIFY(w->window);
+        QVERIFY(QTest::qWaitForWindowExposed(w->window));
+        w->backend->open({lone});
+        QTRY_VERIFY(w->window->property("gridShown").toBool());
+        // Held to the window's least width, the tile stretches to 304 across,
+        // and the window is as tall as it then is.
+        QTRY_COMPARE(w->window->size(), QSize(320, 16 + 228 + 8));
+        close(w);
+    }
+
     void aPictureThatWontShowSaysWhy() {
         auto w = open(m_dir.filePath("broken-picture"));
         QVERIFY(w->window);

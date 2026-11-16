@@ -110,8 +110,9 @@ int main(int argc, char *argv[]) {
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &backend, &Backend::close);
 
     // A video or a song opens once the window has drawn, since starting the
-    // player probes the GPU's decoders on this thread.
-    if (picture) {
+    // player probes the GPU's decoders on this thread. A picture, and a
+    // folder, which is listed before its grid shows, open while it's hidden.
+    if (picture || folder) {
         // Work in the background lets the app quit when it finishes with no
         // window showing, so the hidden window holds it until it shows.
         auto *hold = new QEventLoopLocker;

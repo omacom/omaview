@@ -217,13 +217,18 @@ ApplicationWindow {
     function sizeGrid() {
         if (fullscreen || managed)
             return
-        const gap = 8, tile = gridTileSize, row = Math.round(tile * 3 / 4) + gap
+        const gap = 8, tile = gridTileSize
         const maxWidth = Screen.desktopAvailableWidth * 0.8, maxHeight = Screen.desktopAvailableHeight * 0.8
         const fit = Math.max(1, Math.floor((maxWidth - gap) / (tile + gap)))
         const columns = Math.min(fit, Math.max(1, backend.playlistCount))
+        const wide = Math.max(minimumWidth, gap + columns * (tile + gap))
+        // A window held wider than its tiles stretches them, as MediaGrid
+        // does, so the rows are measured at the width they'll have.
+        const across = wide - gap, laid = Math.max(1, Math.floor(across / (tile + gap)))
+        const row = Math.round((Math.floor(across / laid) - gap) * 3 / 4) + gap
         const rows = Math.min(Math.max(1, Math.floor((maxHeight - 2 * gap) / row)),
-                              Math.max(1, Math.ceil(backend.playlistCount / columns)))
-        ask(Math.max(minimumWidth, gap + columns * (tile + gap)), Math.max(minimumHeight, 2 * gap + rows * row))
+                              Math.max(1, Math.ceil(backend.playlistCount / laid)))
+        ask(wide, Math.max(minimumHeight, 2 * gap + rows * row))
     }
 
     // Started with a video or a song, measured before the window shows.
