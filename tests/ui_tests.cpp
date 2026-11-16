@@ -386,8 +386,8 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(preview->property("frame").toInt() >= 2, 20000);
         QTest::keyClick(w->window, Qt::Key_Escape);
         QTRY_VERIFY(!w->window->property("gridShown").toBool());
-        // The controls' grid button opens it too, clicked once the window
-        // has taken the video's shape, so the click lands where it was aimed.
+        // The controls' grid button opens it too, clicked once the controls
+        // are laid out in the window's new shape, so the click lands on it.
         QTRY_VERIFY(w->window->property("sized").toBool() && w->window->property("reshaped").toBool());
         QQuickItem *gridButton = nullptr;
         QTRY_VERIFY([&] {
@@ -400,7 +400,10 @@ private slots:
                 return nullptr;
             };
             gridButton = visible(w->window->contentItem());
-            return gridButton != nullptr;
+            if (!gridButton || w->window->contentItem()->width() != w->window->width())
+                return false;
+            const QPointF middle = gridButton->mapToScene(QPointF(gridButton->width() / 2, gridButton->height() / 2));
+            return QRectF(QPointF(), w->window->size()).contains(middle);
         }());
         QTest::mouseClick(w->window, Qt::LeftButton, {},
                           gridButton->mapToScene(QPointF(gridButton->width() / 2, gridButton->height() / 2)).toPoint());
