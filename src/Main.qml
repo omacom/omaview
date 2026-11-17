@@ -165,11 +165,17 @@ ApplicationWindow {
         width = w
         height = h
     }
+    // Where the window opens: Hyprland's focused monitor, as Qt's Screen
+    // spans every monitor until the window is mapped.
+    function area() {
+        const a = backend.screenArea()
+        return a.width > 0 ? a : Qt.size(Screen.desktopAvailableWidth, Screen.desktopAvailableHeight)
+    }
     function sizeTo(naturalWidth, naturalHeight) {
         sized = true
         if (managed)
             return
-        const maxWidth = Screen.desktopAvailableWidth * 0.8, maxHeight = Screen.desktopAvailableHeight * 0.8
+        const screen = area(), maxWidth = screen.width * 0.8, maxHeight = screen.height * 0.8
         const scale = Math.min(1, maxWidth / naturalWidth, maxHeight / naturalHeight)
         ask(Math.max(minimumWidth, Math.round(naturalWidth * scale)),
             Math.max(minimumHeight, Math.round(naturalHeight * scale)))
@@ -207,7 +213,7 @@ ApplicationWindow {
         sized = true
         if (managed)
             return
-        const side = Math.max(minimumHeight, Math.min(520, Screen.desktopAvailableHeight * 0.6))
+        const side = Math.max(minimumHeight, Math.min(520, area().height * 0.6))
         ask(side, side)
     }
     // A folder's grid opens as wide as its tiles, up to as many as fit across
@@ -218,7 +224,7 @@ ApplicationWindow {
         if (fullscreen || managed)
             return
         const gap = 8, tile = gridTileSize
-        const maxWidth = Screen.desktopAvailableWidth * 0.8, maxHeight = Screen.desktopAvailableHeight * 0.8
+        const screen = area(), maxWidth = screen.width * 0.8, maxHeight = screen.height * 0.8
         const fit = Math.max(1, Math.floor((maxWidth - gap) / (tile + gap)))
         const columns = Math.min(fit, Math.max(1, backend.playlistCount))
         const wide = Math.max(minimumWidth, gap + columns * (tile + gap))

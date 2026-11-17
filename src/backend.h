@@ -162,6 +162,7 @@ public:
     Q_INVOKABLE void openDialog();
     // Asks the compositor to give the window this size; false when it can't.
     Q_INVOKABLE bool reshapeWindow(QSize size) { return hyprland::reshape(size); }
+    Q_INVOKABLE QSize screenArea() { return hyprland::focusedArea(); }
     Q_INVOKABLE void togglePlay();
     Q_INVOKABLE void play();
     Q_INVOKABLE void pause();
