@@ -1524,14 +1524,12 @@ void Backend::print() {
         QEventLoopLocker keepRunning;
         QString file = path, message;
         QTemporaryFile turned(QDir::tempPath() + "/omaview-print-XXXXXX.png");
-        if (rotation != 0) {
-            const QImage image = picture::load(path, rotation, &message);
-            if (image.isNull() || !turned.open() || !image.save(&turned, "PNG"))
-                file.clear();
-            else
-                file = turned.fileName();
-            turned.close();
-        }
+        const QImage image = picture::load(path, rotation, &message);
+        if (image.isNull() || !turned.open() || !image.save(&turned, "PNG"))
+            file.clear();
+        else
+            file = turned.fileName();
+        turned.close();
         bool sent = false;
         if (!file.isEmpty()) {
             QProcess process;
