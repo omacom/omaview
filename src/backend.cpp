@@ -7,6 +7,8 @@
 #include <QEventLoopLocker>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QImageIOHandler>
+#include <QImageReader>
 #include <QJsonObject>
 #include <QLocale>
 #include <QMediaMetaData>
@@ -1524,12 +1526,25 @@ void Backend::print() {
         QEventLoopLocker keepRunning;
         QString file = path, message;
         QTemporaryFile turned(QDir::tempPath() + "/omaview-print-XXXXXX.png");
-        const QImage image = picture::load(path, rotation, &message);
-        if (image.isNull() || !turned.open() || !image.save(&turned, "PNG"))
-            file.clear();
-        else
-            file = turned.fileName();
-        turned.close();
+        bool native = false;
+        if (rotation == 0) {
+            QImageReader probe(path);
+            if (probe.canRead() && probe.transformation() == QImageIOHandler::TransformationNone) {
+                const QByteArray format = probe.format().toLower();
+                native = format == "jpeg" || format == "png" || format == "tiff";
+            }
+        }
+        if (!native) {
+            const QImage image = picture::load(path, rotation, &message);
+            if (!image.isNull() && turned.open() && image.save(&turned, "PNG"))
+                file = turned.fileName();
+            else {
+                file.clear();
+                if (message.isEmpty())
+                    message = tr("Could not make a copy in %1").arg(QDir::tempPath());
+            }
+            turned.close();
+        }
         bool sent = false;
         if (!file.isEmpty()) {
             QProcess process;

@@ -533,6 +533,75 @@ private slots:
         backend.close();
     }
 
+    void printSendsWebPAsPngAndLeavesJpegAsIs() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString bin = dir.filePath("bin"), out = dir.filePath("out");
+        QVERIFY(QDir().mkpath(bin) && QDir().mkpath(out));
+        const QString script = bin + "/lp", copyPath = out + "/job", argPath = out + "/arg";
+        QVERIFY(write(script,
+                      "#!/bin/bash\ncp -- \"$1\" \"$OMAVIEW_PRINT_COPY\"\nprintf '%s\\n' \"$1\" > \"$OMAVIEW_PRINT_ARG\"\n"));
+        QVERIFY(QFile::setPermissions(script, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner));
+
+        QImage rgb(40, 20, QImage::Format_RGB32);
+        rgb.fill(Qt::red);
+        const QString webp = dir.filePath("still.webp"), jpeg = dir.filePath("upright.jpg");
+        QVERIFY(rgb.save(webp, "WEBP"));
+        QVERIFY(writePhoto(jpeg, QSize(40, 20), 1));
+
+        struct Restore {
+            QByteArray path = qgetenv("PATH");
+            ~Restore() {
+                qputenv("PATH", path);
+                qunsetenv("OMAVIEW_PRINT_COPY");
+                qunsetenv("OMAVIEW_PRINT_ARG");
+            }
+        } restore;
+        qputenv("PATH", (bin + ":" + QString::fromLocal8Bit(restore.path)).toUtf8());
+        qputenv("OMAVIEW_PRINT_COPY", copyPath.toUtf8());
+        qputenv("OMAVIEW_PRINT_ARG", argPath.toUtf8());
+
+        const auto printedArg = [&] {
+            QFile file(argPath);
+            return file.open(QIODevice::ReadOnly) ? QString::fromUtf8(file.readAll()).trimmed() : QString();
+        };
+        const auto copyIsPng = [&] {
+            QFile file(copyPath);
+            return file.open(QIODevice::ReadOnly) && file.read(8) == QByteArray("\x89PNG\r\n\x1a\n", 8);
+        };
+        const struct Case {
+            QString path;
+            int turn;
+            bool png;
+            bool samePath;
+        } cases[] = {{webp, 0, true, false}, {jpeg, 0, false, true}, {jpeg, 90, true, false}, {m_picture, 0, true, false}};
+        for (const Case &item : cases) {
+            QFile::remove(copyPath);
+            QFile::remove(argPath);
+            Backend::Options options;
+            options.positionsPath = dir.filePath("positions.json");
+            options.audio = false;
+            options.previews = false;
+            Backend backend(options);
+            QString noticed;
+            QObject::connect(&backend, &Backend::notice, [&](const QString &text) { noticed = text; });
+            backend.open({item.path});
+            QTRY_VERIFY(backend.isPicture());
+            QTRY_VERIFY(!backend.pictureSource().isEmpty());
+            if (item.turn)
+                backend.rotate(item.turn);
+            backend.print();
+            QTRY_VERIFY2(!noticed.isEmpty(), qPrintable(noticed));
+            QVERIFY2(noticed.startsWith("Sent "), qPrintable(noticed));
+            QCOMPARE(copyIsPng(), item.png);
+            if (item.samePath)
+                QCOMPARE(printedArg(), item.path);
+            else
+                QVERIFY(printedArg() != item.path);
+            backend.close();
+        }
+    }
+
     void theTrashTakesAFileAndGivesItBack() {
         // A home of its own on the same disk as the files, so the Trash used
         // is a temporary one and never the desktop's.
