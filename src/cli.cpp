@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
+#include <cmath>
 #include <cstdio>
 
 #include "frames.h"
@@ -40,13 +41,13 @@ struct Command {
 };
 
 QString clock(double seconds) {
-    const qint64 total = qint64(seconds);
-    const QString fraction = QString::number(seconds - total, 'f', 3).mid(1);
-    return QString("%1:%2:%3%4")
+    const qint64 ms = std::isfinite(seconds) ? std::max<qint64>(0, qRound64(seconds * 1000.0)) : 0;
+    const qint64 total = ms / 1000;
+    return QString("%1:%2:%3.%4")
         .arg(total / 3600)
         .arg(total / 60 % 60, 2, 10, QChar('0'))
         .arg(total % 60, 2, 10, QChar('0'))
-        .arg(fraction);
+        .arg(ms % 1000, 3, 10, QChar('0'));
 }
 
 // A picture: its size, format and what the camera wrote.
@@ -72,7 +73,8 @@ int pictureInfo(const QString &path, bool json) {
         print(stdout, "  Lens      " + exif.lens);
     QStringList exposure;
     if (exif.exposure > 0)
-        exposure << (exif.exposure >= 1 ? QString::number(exif.exposure) : QString("1/%1").arg(qRound(1 / exif.exposure))) + " s";
+        exposure << (exif.exposure >= 1 ? QString::number(exif.exposure)
+                                        : QString("1/%1").arg(qRound64(1.0 / std::max(exif.exposure, 1e-9)))) + " s";
     if (exif.aperture > 0)
         exposure << "f/" + QString::number(exif.aperture);
     if (exif.iso > 0)
@@ -223,7 +225,7 @@ double parseTime(const QString &text) {
     for (const QString &part : parts) {
         bool ok = false;
         const double value = part.toDouble(&ok);
-        if (!ok || value < 0)
+        if (!ok || !std::isfinite(value) || value < 0)
             return -1;
         seconds = seconds * 60 + value;
     }

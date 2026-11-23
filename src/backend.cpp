@@ -1144,7 +1144,7 @@ void Backend::buildPictureInfo(Row row) {
     QStringList exposure;
     if (exif.exposure > 0)
         exposure << tr("%1 s").arg(exif.exposure >= 1 ? locale.toString(exif.exposure, 'g', 3)
-                                                       : QString("1/%1").arg(qRound(1 / exif.exposure)));
+                                                      : QString("1/%1").arg(qRound64(1.0 / std::max(exif.exposure, 1e-9))));
     if (exif.aperture > 0)
         exposure << "f/" + locale.toString(exif.aperture, 'f', exif.aperture < 10 ? 1 : 0);
     if (exif.iso > 0)

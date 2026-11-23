@@ -40,6 +40,8 @@ QString seconds(double value) {
 // Runs ffmpeg and returns stdout, or empty with the reason in *error.
 QByteArray ffmpeg(const QStringList &arguments, int timeoutMs, QString *error, bool lowPriority = false,
                   const std::atomic_bool *cancelled = nullptr) {
+    if (cancelled && *cancelled)
+        return {};
     const QString tool = probe::toolPath("ffmpeg");
     if (tool.isEmpty()) {
         if (error)
@@ -64,7 +66,8 @@ QByteArray ffmpeg(const QStringList &arguments, int timeoutMs, QString *error, b
             return {};
         }
     }
-    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+    if (process.error() == QProcess::FailedToStart || process.exitStatus() != QProcess::NormalExit
+        || process.exitCode() != 0) {
         if (error) {
             const QString message = QString::fromUtf8(process.readAllStandardError()).trimmed().section('\n', -1);
             *error = message.isEmpty() ? Texts::tr("ffmpeg could not read this file.")
@@ -272,6 +275,8 @@ QImage poster(const QString &path, const std::atomic_bool *cancelled) {
         return {};
     const std::shared_ptr<QMutex> lock = lockFor(cache);
     QMutexLocker locker(lock.get());
+    if ((cancelled && *cancelled) || hasFailed(cache))
+        return {};
     QImage image = readCached(cache);
     if (!image.isNull())
         return image;
@@ -307,6 +312,13 @@ QImage makeFilmstrip(const QString &path, const std::atomic_bool *cancelled) {
     }
     const std::shared_ptr<QMutex> lock = lockFor(cache);
     QMutexLocker locker(lock.get());
+    if ((cancelled && *cancelled) || hasFailed(cache))
+        return {};
+    {
+        QMutexLocker kept(&stripsLock);
+        if (const QImage *cached = strips.object(cache))
+            return *cached;
+    }
     QImage strip = readCached(cache);
     if (strip.isNull()) {
         const double duration = probe::run(path, 5000, cancelled).duration;
