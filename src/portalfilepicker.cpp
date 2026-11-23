@@ -115,6 +115,11 @@ PortalFilePicker::PortalFilePicker(QObject *parent) : FilePicker(parent) {
     registerPortalFilterTypes();
 }
 
+PortalFilePicker::~PortalFilePicker() {
+    closePendingRequest();
+    clearPending();
+}
+
 void PortalFilePicker::openMedia() {
     QVariantMap options;
     options.insert(QStringLiteral("accept_label"), tr("Open"));

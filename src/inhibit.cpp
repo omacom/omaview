@@ -1,6 +1,7 @@
 #include "inhibit.h"
 
 #include <QGuiApplication>
+#include <QPlatformSurfaceEvent>
 #include <cstring>
 #include <wayland-client.h>
 
@@ -12,8 +13,18 @@
 #include "idle-inhibit-unstable-v1-client-protocol.h"
 
 namespace {
-const wl_registry_listener registryListener = {&IdleInhibitor::registryGlobal, &IdleInhibitor::registryGlobalRemove};
+
+void registryGlobalRemove(void *, wl_registry *, uint32_t) {}
+
+const wl_registry_listener registryListener = {&IdleInhibitor::registryGlobal, &registryGlobalRemove};
+
+void flushWayland() {
+    if (auto *wayland = qGuiApp ? qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>() : nullptr;
+        wayland && wayland->display())
+        wl_display_flush(wayland->display());
 }
+
+}  // namespace
 
 void IdleInhibitor::registryGlobal(void *data, wl_registry *registry, uint32_t name, const char *interface,
                                    uint32_t) {
@@ -21,16 +32,6 @@ void IdleInhibitor::registryGlobal(void *data, wl_registry *registry, uint32_t n
     if (std::strcmp(interface, zwp_idle_inhibit_manager_v1_interface.name) == 0 && !self->m_manager) {
         self->m_manager = static_cast<zwp_idle_inhibit_manager_v1 *>(
             wl_registry_bind(registry, name, &zwp_idle_inhibit_manager_v1_interface, 1));
-        self->m_managerName = name;
-    }
-}
-
-void IdleInhibitor::registryGlobalRemove(void *data, wl_registry *, uint32_t name) {
-    auto *self = static_cast<IdleInhibitor *>(data);
-    if (self->m_manager && name == self->m_managerName) {
-        self->release();
-        zwp_idle_inhibit_manager_v1_destroy(self->m_manager);
-        self->m_manager = nullptr;
     }
 }
 
@@ -41,26 +42,38 @@ IdleInhibitor::IdleInhibitor(QObject *parent) : QObject(parent) {
     // A queue of Omaview's own, so asking for the globals never dispatches
     // events Qt's Wayland thread is waiting for.
     wl_display *display = wayland->display();
-    m_queue = wl_display_create_queue(display);
+    wl_event_queue *queue = wl_display_create_queue(display);
+    if (!queue)
+        return;
     auto *wrapper = static_cast<wl_display *>(wl_proxy_create_wrapper(display));
-    wl_proxy_set_queue(reinterpret_cast<wl_proxy *>(wrapper), m_queue);
-    m_registry = wl_display_get_registry(wrapper);
+    if (!wrapper) {
+        wl_event_queue_destroy(queue);
+        return;
+    }
+    wl_proxy_set_queue(reinterpret_cast<wl_proxy *>(wrapper), queue);
+    wl_registry *registry = wl_display_get_registry(wrapper);
     wl_proxy_wrapper_destroy(wrapper);
-    wl_registry_add_listener(m_registry, &registryListener, this);
-    wl_display_roundtrip_queue(display, m_queue);
+    if (registry) {
+        wl_registry_add_listener(registry, &registryListener, this);
+        wl_display_roundtrip_queue(display, queue);
+        // Neither the manager nor its inhibitors have events; detach from the
+        // temporary queue so it and the registry can be freed right away rather
+        // than accumulating future global events undispatched.
+        if (m_manager)
+            wl_proxy_set_queue(reinterpret_cast<wl_proxy *>(m_manager), nullptr);
+        wl_registry_destroy(registry);
+    }
+    wl_event_queue_destroy(queue);
 }
 
 IdleInhibitor::~IdleInhibitor() {
+    if (m_window)
+        m_window->removeEventFilter(this);
     release();
-    if (m_manager)
+    if (m_manager) {
         zwp_idle_inhibit_manager_v1_destroy(m_manager);
-    if (m_registry)
-        wl_registry_destroy(m_registry);
-    if (m_queue)
-        wl_event_queue_destroy(m_queue);
-    auto *wayland = qGuiApp ? qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>() : nullptr;
-    if (wayland && wayland->display())
-        wl_display_flush(wayland->display());
+        flushWayland();
+    }
 }
 
 void IdleInhibitor::setActive(bool active) {
@@ -74,25 +87,41 @@ void IdleInhibitor::setActive(bool active) {
 void IdleInhibitor::setWindow(QWindow *window) {
     if (m_window == window)
         return;
-    if (m_window)
+    if (m_window) {
+        m_window->removeEventFilter(this);
         disconnect(m_window, nullptr, this, nullptr);
+    }
     release();
     m_window = window;
-    // The surface goes away when the window is hidden and a new one comes
-    // with it, so the inhibitor follows.
-    if (m_window)
+    // The surface comes and goes with the window's visibility and platform
+    // surface lifecycle, so the inhibitor follows both.
+    if (m_window) {
+        m_window->installEventFilter(this);
         connect(m_window, &QWindow::visibleChanged, this, [this] {
             release();
             update();
         });
+    }
     update();
     emit windowChanged();
+}
+
+bool IdleInhibitor::eventFilter(QObject *watched, QEvent *event) {
+    if (watched == m_window && event->type() == QEvent::PlatformSurface) {
+        const auto type = static_cast<QPlatformSurfaceEvent *>(event)->surfaceEventType();
+        if (type == QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed)
+            release();
+        else if (type == QPlatformSurfaceEvent::SurfaceCreated)
+            update();
+    }
+    return QObject::eventFilter(watched, event);
 }
 
 void IdleInhibitor::release() {
     if (m_inhibitor) {
         zwp_idle_inhibitor_v1_destroy(m_inhibitor);
         m_inhibitor = nullptr;
+        flushWayland();
     }
     m_surface = nullptr;
 }
@@ -111,6 +140,5 @@ void IdleInhibitor::update() {
         return;
     m_inhibitor = zwp_idle_inhibit_manager_v1_create_inhibitor(m_manager, static_cast<wl_surface *>(surface));
     m_surface = surface;
-    if (auto *wayland = qGuiApp->nativeInterface<QNativeInterface::QWaylandApplication>())
-        wl_display_flush(wayland->display());
+    flushWayland();
 }

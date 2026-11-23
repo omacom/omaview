@@ -853,6 +853,12 @@ private slots:
             send(player, "Play");
             QTRY_VERIFY(backend.playing());
             QCOMPARE(mpris.playbackStatus(), QString("Playing"));
+            // Stepping to a picture reports Stopped and not playable.
+            backend.open({m_picture});
+            QTRY_COMPARE(mpris.playbackStatus(), QString("Stopped"));
+            QDBusPendingCall canPlay = send("org.freedesktop.DBus.Properties", "Get", {player, QString("CanPlay")});
+            QVERIFY2(!canPlay.isError(), qPrintable(canPlay.error().message()));
+            QCOMPARE(canPlay.reply().arguments().value(0).value<QDBusVariant>().variant().toBool(), false);
             QDBusConnection::disconnectFromBus("omaview-client");
             backend.close();
         }
