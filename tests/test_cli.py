@@ -15,7 +15,9 @@ def run(*arguments, home):
         for key, value in os.environ.items()
         if key not in ("WAYLAND_DISPLAY", "DISPLAY", "QT_QPA_PLATFORM")
     }
-    environment.update(HOME=home, XDG_STATE_HOME=os.path.join(home, "state"), LANG="da_DK.UTF-8")
+    # Omarchy sets the gtk3 platform theme for every app, so the commands must
+    # work under it with no display.
+    environment.update(HOME=home, XDG_STATE_HOME=os.path.join(home, "state"), LANG="da_DK.UTF-8", QT_QPA_PLATFORMTHEME="gtk3")
     return subprocess.run([OMAVIEW, *arguments], capture_output=True, text=True, env=environment, timeout=120)
 
 

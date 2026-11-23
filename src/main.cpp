@@ -31,8 +31,12 @@ int main(int argc, char *argv[]) {
     const QByteArray first = argc > 1 ? QByteArray(argv[1]) : QByteArray();
     const bool command = isCliCommand(QString::fromLocal8Bit(first));
     const bool help = first == "--help" || first == "-h";
-    if (command || help)
+    if (command || help) {
         qputenv("QT_QPA_PLATFORM", "offscreen");
+        // A platform theme such as gtk3, which Omarchy sets for every app,
+        // opens a display of its own and exits when there is none.
+        qunsetenv("QT_QPA_PLATFORMTHEME");
+    }
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("omaview");
