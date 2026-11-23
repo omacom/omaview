@@ -40,16 +40,6 @@ struct Command {
     QString argument(int i) const { return parser.positionalArguments().value(i); }
 };
 
-QString clock(double seconds) {
-    const qint64 ms = std::isfinite(seconds) ? std::max<qint64>(0, qRound64(seconds * 1000.0)) : 0;
-    const qint64 total = ms / 1000;
-    return QString("%1:%2:%3.%4")
-        .arg(total / 3600)
-        .arg(total / 60 % 60, 2, 10, QChar('0'))
-        .arg(total % 60, 2, 10, QChar('0'))
-        .arg(ms % 1000, 3, 10, QChar('0'));
-}
-
 // A picture: its size, format and what the camera wrote.
 int pictureInfo(const QString &path, bool json) {
     const picture::Info info = picture::read(path);
@@ -113,7 +103,7 @@ int info(const QStringList &arguments) {
     if (!info.title.isEmpty())
         print(stdout, "  Title     " + info.title);
     print(stdout, "  Format    " + info.format);
-    print(stdout, "  Duration  " + clock(info.duration));
+    print(stdout, "  Duration  " + formatTime(info.duration));
     for (const probe::Stream &stream : info.streams) {
         QStringList parts{stream.codec};
         if (stream.type == "video" && stream.width > 0)
@@ -133,9 +123,9 @@ int info(const QStringList &arguments) {
         print(stdout, QString("  #%1 %2  %3").arg(stream.index).arg(stream.type, -8).arg(parts.join(", ")));
     }
     for (const probe::Chapter &chapter : info.chapters)
-        print(stdout, "  Chapter   " + clock(chapter.start) + "  " + chapter.title);
+        print(stdout, "  Chapter   " + formatTime(chapter.start) + "  " + chapter.title);
     if (resume >= 0)
-        print(stdout, "  Resumes   " + clock(resume / 1000.0));
+        print(stdout, "  Resumes   " + formatTime(resume / 1000.0));
     return 0;
 }
 
@@ -216,6 +206,16 @@ int help(const QStringList &arguments) {
 }
 
 }  // namespace
+
+QString formatTime(double seconds) {
+    const qint64 ms = std::isfinite(seconds) ? std::max<qint64>(0, qRound64(seconds * 1000.0)) : 0;
+    const qint64 total = ms / 1000;
+    return QString("%1:%2:%3.%4")
+        .arg(total / 3600)
+        .arg(total / 60 % 60, 2, 10, QChar('0'))
+        .arg(total % 60, 2, 10, QChar('0'))
+        .arg(ms % 1000, 3, 10, QChar('0'));
+}
 
 double parseTime(const QString &text) {
     const QStringList parts = text.trimmed().split(':');
