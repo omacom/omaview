@@ -342,6 +342,7 @@ private:
     QString m_title;
     QString m_artist;
     QString m_coverArt;
+    bool m_coverArtLoading = false;
     Problem m_problem = Problem::None;
     bool m_stopped = false;  // MPRIS Stop: back at the start, not merely paused
     qint64 m_position = 0;

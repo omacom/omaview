@@ -5,7 +5,9 @@
 #include <QFileInfo>
 #include <QImageReader>
 #include <QSet>
+#include <QStringView>
 #include <algorithm>
+#include <vector>
 
 namespace playlist {
 
@@ -42,7 +44,11 @@ const QSet<QString> &pictureExtensions() {
 }
 
 QString suffixOf(const QString &path) {
-    return QFileInfo(path).suffix().toLower();
+    const QStringView view(path);
+    const qsizetype slash = view.lastIndexOf('/');
+    const QStringView name = slash >= 0 ? view.sliced(slash + 1) : view;
+    const qsizetype dot = name.lastIndexOf('.');
+    return dot >= 0 ? name.sliced(dot + 1).toString().toLower() : QString();
 }
 
 }  // namespace
@@ -60,19 +66,35 @@ Kind kind(const QString &path) {
 
 bool picture(const QString &path) { return kind(path) == Kind::Picture; }
 
-// Natural, case-insensitive order.
+// Natural, case-insensitive order. Precomputes sort keys once per path rather
+// than constructing QFileInfo and running collation on every comparison.
 static void sort(QStringList &paths) {
+    if (paths.size() < 2)
+        return;
     QCollator collator;
     collator.setNumericMode(true);
     collator.setCaseSensitivity(Qt::CaseInsensitive);
-    std::sort(paths.begin(), paths.end(), [&](const QString &a, const QString &b) {
-        const int order = collator.compare(QFileInfo(a).fileName(), QFileInfo(b).fileName());
-        return order != 0 ? order < 0 : a < b;
+    struct Item {
+        QCollatorSortKey key;
+        QString path;
+    };
+    std::vector<Item> items;
+    items.reserve(std::size_t(paths.size()));
+    for (QString &path : paths) {
+        const qsizetype slash = path.lastIndexOf('/');
+        const QString name = slash >= 0 ? path.mid(slash + 1) : path;
+        items.push_back({collator.sortKey(name), std::move(path)});
+    }
+    std::sort(items.begin(), items.end(), [](const Item &a, const Item &b) {
+        const int order = a.key.compare(b.key);
+        return order != 0 ? order < 0 : a.path < b.path;
     });
+    for (qsizetype i = 0; i < paths.size(); ++i)
+        paths[i] = std::move(items[std::size_t(i)].path);
 }
 
 QStringList siblings(const QString &path) {
-    const QFileInfo file(path);
+    const QFileInfo file(QDir::cleanPath(QFileInfo(path).absoluteFilePath()));
     const Kind own = kind(path);
     QStringList found;
     for (const QFileInfo &entry : file.dir().entryInfoList(QDir::Files | QDir::Readable)) {
@@ -91,20 +113,19 @@ QStringList siblings(const QString &path) {
 }
 
 QStringList folder(const QString &directory) {
-    QStringList found;
-    int pictures = 0, songs = 0;
+    QStringList pictures, songs, videos;
     for (const QFileInfo &entry : QDir(directory).entryInfoList(QDir::Files | QDir::Readable)) {
-        const Kind each = kind(entry.fileName());
-        if (each == Kind::None)
-            continue;
-        pictures += each == Kind::Picture;
-        songs += each == Kind::Audio;
-        found << entry.absoluteFilePath();
+        switch (kind(entry.fileName())) {
+        case Kind::Picture: pictures << entry.absoluteFilePath(); break;
+        case Kind::Audio: songs << entry.absoluteFilePath(); break;
+        case Kind::Video: videos << entry.absoluteFilePath(); break;
+        case Kind::None: break;
+        }
     }
     // An album's cover doesn't make it a folder of pictures: whichever there
     // are more of wins.
-    const Kind left = pictures > songs ? Kind::Audio : Kind::Picture;
-    found.removeIf([left](const QString &path) { return kind(path) == left; });
+    QStringList found = pictures.size() > songs.size() ? std::move(pictures) : std::move(songs);
+    found.append(videos);
     sort(found);
     return found;
 }

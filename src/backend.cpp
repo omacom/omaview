@@ -414,7 +414,7 @@ void Backend::open(const QStringList &arguments) {
         const QUrl url = QUrl::fromUserInput(argument, QDir::currentPath(), QUrl::AssumeLocalFile);
         if (!url.isLocalFile())
             continue;
-        const QFileInfo file(url.toLocalFile());
+        const QFileInfo file(QDir::cleanPath(url.toLocalFile()));
         paths << file.absoluteFilePath();
         folder = folder || file.isDir();
     }
@@ -494,6 +494,7 @@ void Backend::resetFile() {
     m_title.clear();
     m_artist.clear();
     m_coverArt.clear();
+    m_coverArtLoading = false;
     m_problem = Problem::None;
     m_stopped = false;
     m_position = 0;
@@ -1039,17 +1040,36 @@ void Backend::updateMetadata() {
         artist = metadata.stringValue(QMediaMetaData::AlbumArtist);
     if (!artist.isEmpty())
         m_artist = artist;
-    QImage cover = metadata.value(QMediaMetaData::CoverArtImage).value<QImage>();
-    if (!cover.isNull()) {
-        // Small enough to hand QML as a data URL, which needs no provider
-        // whose lifetime has to outlast the engine's.
-        if (cover.width() > 1024 || cover.height() > 1024)
-            cover = cover.scaled(1024, 1024, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        QByteArray bytes;
-        QBuffer buffer(&bytes);
-        buffer.open(QIODevice::WriteOnly);
-        cover.save(&buffer, "JPG", 90);
-        m_coverArt = "data:image/jpeg;base64," + QString::fromLatin1(bytes.toBase64());
+    if (m_coverArt.isEmpty() && !m_coverArtLoading) {
+        QImage cover = metadata.value(QMediaMetaData::CoverArtImage).value<QImage>();
+        if (!cover.isNull()) {
+            m_coverArtLoading = true;
+            const quint64 generation = m_generation;
+            QPointer<Backend> self(this);
+            (void)QtConcurrent::run([self, cover, generation]() mutable {
+                QEventLoopLocker keepRunning;
+                // Scaled and encoded off the GUI thread, small enough to hand
+                // QML as a data URL without a provider whose lifetime has to
+                // outlast the engine's.
+                if (cover.width() > 1024 || cover.height() > 1024)
+                    cover = cover.scaled(1024, 1024, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                QByteArray bytes;
+                QBuffer buffer(&bytes);
+                buffer.open(QIODevice::WriteOnly);
+                const QString encoded = cover.save(&buffer, "JPG", 90)
+                                            ? QStringLiteral("data:image/jpeg;base64,") + QString::fromLatin1(bytes.toBase64())
+                                            : QString();
+                QMetaObject::invokeMethod(qApp, [self, encoded, generation] {
+                    if (!self || self->m_generation != generation)
+                        return;
+                    self->m_coverArtLoading = false;
+                    if (!encoded.isEmpty()) {
+                        self->m_coverArt = encoded;
+                        emit self->metadataChanged();
+                    }
+                }, Qt::QueuedConnection);
+            });
+        }
     }
     QSize resolution = metadata.value(QMediaMetaData::Resolution).toSize();
     m_videoTurned = std::abs(metadata.value(QMediaMetaData::Orientation).toInt()) % 180 == 90;

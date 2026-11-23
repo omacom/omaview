@@ -351,6 +351,11 @@ private slots:
         QCOMPARE(names, (QStringList{"cover.jpg", "Episode 1.mp4", "episode 2.mkv", "Episode 10.mkv", "song.flac"}));
         QCOMPARE(playlist::kind("a.FLAC"), playlist::Kind::Audio);
         QCOMPARE(playlist::kind("a.txt"), playlist::Kind::None);
+        QCOMPARE(playlist::kind("/dir.jpg/noext"), playlist::Kind::None);
+        QCOMPARE(playlist::kind("/dir/file."), playlist::Kind::None);
+        // Redundant path separators don't duplicate the opened file in siblings().
+        const QString noisy = dir.path() + "//episode 2.mkv";
+        QCOMPARE(playlist::siblings(noisy).size(), 5);
     }
 
     void songsAndPicturesDontMix() {
