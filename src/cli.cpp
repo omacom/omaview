@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 
@@ -64,7 +65,7 @@ int pictureInfo(const QString &path, bool json) {
     QStringList exposure;
     if (exif.exposure > 0)
         exposure << (exif.exposure >= 1 ? QString::number(exif.exposure)
-                                        : QString("1/%1").arg(qRound64(1.0 / std::max(exif.exposure, 1e-9)))) + " s";
+                                        : QString("1/%1").arg(qRound64(1.0 / exif.exposure))) + " s";
     if (exif.aperture > 0)
         exposure << "f/" + QString::number(exif.aperture);
     if (exif.iso > 0)
@@ -208,7 +209,8 @@ int help(const QStringList &arguments) {
 }  // namespace
 
 QString formatTime(double seconds) {
-    const qint64 ms = std::isfinite(seconds) ? std::max<qint64>(0, qRound64(seconds * 1000.0)) : 0;
+    const double clamped = std::isfinite(seconds) ? std::clamp(seconds, 0.0, 1e12) : 0.0;
+    const qint64 ms = qRound64(clamped * 1000.0);
     const qint64 total = ms / 1000;
     return QString("%1:%2:%3.%4")
         .arg(total / 3600)
@@ -229,7 +231,7 @@ double parseTime(const QString &text) {
             return -1;
         seconds = seconds * 60 + value;
     }
-    return seconds;
+    return std::isfinite(seconds) ? seconds : -1;
 }
 
 QString cliSummary() {

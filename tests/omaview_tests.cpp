@@ -667,10 +667,12 @@ private slots:
         QCOMPARE(parseTime("nan"), -1.0);
         QCOMPARE(parseTime("inf"), -1.0);
         QCOMPARE(parseTime("-inf"), -1.0);
+        QCOMPARE(parseTime("1e306:0:0"), -1.0);
         QCOMPARE(formatTime(1.9999), QString("0:00:02.000"));
         QCOMPARE(formatTime(59.9999), QString("0:01:00.000"));
         QCOMPARE(formatTime(-1.5), QString("0:00:00.000"));
         QCOMPARE(formatTime(std::numeric_limits<double>::quiet_NaN()), QString("0:00:00.000"));
+        QCOMPARE(formatTime(1e20), formatTime(1e12));
     }
 
     void framesAreExact() {
