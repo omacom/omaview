@@ -4,6 +4,7 @@
 #include <QDBusConnection>
 #include <QDBusArgument>
 #include <QDBusInterface>
+#include <QDBusMessage>
 #include <QDBusMetaType>
 #include <QDBusObjectPath>
 #include <QDBusPendingCallWatcher>
@@ -157,10 +158,12 @@ bool PortalFilePicker::connectToRequestPath(const QString &path) {
 void PortalFilePicker::closePendingRequest() {
     if (m_pendingPath.isEmpty())
         return;
-    QDBusInterface request(QStringLiteral("org.freedesktop.portal.Desktop"), m_pendingPath,
-                           QStringLiteral("org.freedesktop.portal.Request"),
-                           QDBusConnection::sessionBus());
-    request.asyncCall(QStringLiteral("Close"));
+    // Direct method call without QDBusInterface so closing a stuck portal
+    // request (including from ~PortalFilePicker) never blocks on Introspect.
+    QDBusMessage message = QDBusMessage::createMethodCall(
+        QStringLiteral("org.freedesktop.portal.Desktop"), m_pendingPath,
+        QStringLiteral("org.freedesktop.portal.Request"), QStringLiteral("Close"));
+    QDBusConnection::sessionBus().send(message);
 }
 
 void PortalFilePicker::requestFile(const QString &method, const QString &title,

@@ -139,7 +139,7 @@ Backend::Backend(const Options &options, QObject *parent)
     auto boostDone = [this] {
         m_boostTimeout.stop();
         if (std::exchange(m_boostPending, false))
-            applyBoost();
+            QMetaObject::invokeMethod(this, &Backend::applyBoost, Qt::QueuedConnection);
     };
     connect(&m_boostProcess, &QProcess::finished, this, boostDone);
     connect(&m_boostProcess, &QProcess::errorOccurred, this, [boostDone](QProcess::ProcessError error) {
@@ -587,14 +587,8 @@ void Backend::load(int index) {
         return;
     }
     ensurePlayer();
-    const QUrl next = QUrl::fromUserInput(item, QDir::currentPath(), QUrl::AssumeLocalFile);
-    // Setting the source the player already has does nothing, so reopening
-    // the same file clears it first, before resetFile() so the empty source's
-    // tracksChanged never marks the new file's tracks ready early.
-    if (m_player->source() == next)
-        m_player->setSource(QUrl());
     resetFile();
-    m_source = next;
+    m_source = QUrl::fromUserInput(item, QDir::currentPath(), QUrl::AssumeLocalFile);
 
     if (m_source.isLocalFile()) {
         const QString path = m_source.toLocalFile();
@@ -625,6 +619,10 @@ void Backend::load(int index) {
         m_probed = true;
     }
 
+    // Setting the source the player already has does nothing, so reopening
+    // the same file clears it first.
+    if (m_player->source() == m_source)
+        m_player->setSource(QUrl());
     m_player->setSource(m_source);
     m_player->setLoops(m_looping ? QMediaPlayer::Infinite : QMediaPlayer::Once);
     m_player->setPlaybackRate(m_rate);
@@ -832,7 +830,7 @@ void Backend::onProbed(const probe::Info &info, const QList<subtitles::Sidecar> 
 }
 
 void Backend::onTracks() {
-    if (!m_player || m_picture || m_player->source().isEmpty())
+    if (m_picture || m_player->source().isEmpty())
         return;
     m_tracksReady = true;
     chooseTracks();
