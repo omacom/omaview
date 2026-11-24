@@ -414,7 +414,7 @@ void Backend::open(const QStringList &arguments) {
         const QUrl url = QUrl::fromUserInput(argument, QDir::currentPath(), QUrl::AssumeLocalFile);
         if (!url.isLocalFile())
             continue;
-        const QFileInfo file(QDir::cleanPath(url.toLocalFile()));
+        const QFileInfo file(url.toLocalFile());
         paths << file.absoluteFilePath();
         folder = folder || file.isDir();
     }

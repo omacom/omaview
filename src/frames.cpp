@@ -262,6 +262,18 @@ QThreadPool &shotPool() {
     return *pool;
 }
 
+// Scrub-preview atlases run in a separate small pool so up to 100 atlas tiles
+// neither starve interactive grid filmstrips nor saturate disk I/O during
+// playback.
+QThreadPool &previewPool() {
+    static QThreadPool *pool = [] {
+        auto *created = new QThreadPool;
+        created->setMaxThreadCount(std::clamp(QThread::idealThreadCount() / 2, 2, 3));
+        return created;
+    }();
+    return *pool;
+}
+
 // The last strips decoded, so a preview's ten frames decode the strip once.
 QMutex stripsLock;
 QCache<QString, QImage> strips(64 * 1024 * 1024);
@@ -432,7 +444,7 @@ void Previews::start(const QString &path, double duration, QSize videoSize) {
         const int probeCount = std::min(3, layout.count);
         QList<int> first(probeCount);
         std::iota(first.begin(), first.end(), 0);
-        QList<QImage> tiles = QtConcurrent::blockingMapped(&shotPool(), first, grab);
+        QList<QImage> tiles = QtConcurrent::blockingMapped(&previewPool(), first, grab);
         if (*cancelled)
             return;
         if (std::all_of(tiles.begin(), tiles.end(), [](const QImage &tile) { return tile.isNull(); }))
@@ -440,7 +452,7 @@ void Previews::start(const QString &path, double duration, QSize videoSize) {
         if (layout.count > probeCount) {
             QList<int> rest(layout.count - probeCount);
             std::iota(rest.begin(), rest.end(), probeCount);
-            tiles.append(QtConcurrent::blockingMapped(&shotPool(), rest, grab));
+            tiles.append(QtConcurrent::blockingMapped(&previewPool(), rest, grab));
             if (*cancelled)
                 return;
         }

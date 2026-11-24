@@ -4,10 +4,10 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QImageReader>
+#include <QLocale>
 #include <QSet>
 #include <QStringView>
 #include <algorithm>
-#include <vector>
 
 namespace playlist {
 
@@ -43,10 +43,14 @@ const QSet<QString> &pictureExtensions() {
     return set;
 }
 
-QString suffixOf(const QString &path) {
+QStringView fileNameOf(const QString &path) {
     const QStringView view(path);
     const qsizetype slash = view.lastIndexOf('/');
-    const QStringView name = slash >= 0 ? view.sliced(slash + 1) : view;
+    return slash >= 0 ? view.sliced(slash + 1) : view;
+}
+
+QString suffixOf(const QString &path) {
+    const QStringView name = fileNameOf(path);
     const qsizetype dot = name.lastIndexOf('.');
     return dot >= 0 ? name.sliced(dot + 1).toString().toLower() : QString();
 }
@@ -71,30 +75,30 @@ bool picture(const QString &path) { return kind(path) == Kind::Picture; }
 static void sort(QStringList &paths) {
     if (paths.size() < 2)
         return;
-    QCollator collator;
+    // Qt's C-locale collator bypasses ICU, dropping numeric mode and
+    // sortKey() case-insensitivity; fall back to an ICU locale when C is set.
+    const QLocale locale;
+    QCollator collator(locale.language() == QLocale::C ? QLocale(QLocale::English) : locale);
     collator.setNumericMode(true);
     collator.setCaseSensitivity(Qt::CaseInsensitive);
     struct Item {
         QCollatorSortKey key;
         QString path;
     };
-    std::vector<Item> items;
-    items.reserve(std::size_t(paths.size()));
-    for (QString &path : paths) {
-        const qsizetype slash = path.lastIndexOf('/');
-        const QString name = slash >= 0 ? path.mid(slash + 1) : path;
-        items.push_back({collator.sortKey(name), std::move(path)});
-    }
+    QList<Item> items;
+    items.reserve(paths.size());
+    for (QString &path : paths)
+        items.push_back({collator.sortKey(fileNameOf(path).toString()), std::move(path)});
     std::sort(items.begin(), items.end(), [](const Item &a, const Item &b) {
         const int order = a.key.compare(b.key);
         return order != 0 ? order < 0 : a.path < b.path;
     });
     for (qsizetype i = 0; i < paths.size(); ++i)
-        paths[i] = std::move(items[std::size_t(i)].path);
+        paths[i] = std::move(items[i].path);
 }
 
 QStringList siblings(const QString &path) {
-    const QFileInfo file(QDir::cleanPath(QFileInfo(path).absoluteFilePath()));
+    const QFileInfo file(path);
     const Kind own = kind(path);
     QStringList found;
     for (const QFileInfo &entry : file.dir().entryInfoList(QDir::Files | QDir::Readable)) {
