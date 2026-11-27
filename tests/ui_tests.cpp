@@ -271,6 +271,24 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(subtitle->property("text").toString().contains("driving"), 8000);
         w->backend->seek(4500);
         QTRY_COMPARE(subtitle->property("text").toString(), QString("Then we walked."));
+        // Z and X shift subtitles earlier or later by 100 ms and show the delay.
+        w->backend->seek(3950);
+        QCOMPARE(subtitle->property("text").toString(), QString());
+        QTest::keyClick(w->window, Qt::Key_Z);
+        QCOMPARE(w->backend->subtitleDelay(), qint64(-100));
+        QCOMPARE(levelValue->property("text").toString(), QString("-100 ms"));
+        QCOMPARE(subtitle->property("text").toString(), QString("Then we walked."));
+        QTest::keyClick(w->window, Qt::Key_X);
+        QTest::keyClick(w->window, Qt::Key_X);
+        QCOMPARE(w->backend->subtitleDelay(), qint64(100));
+        QCOMPARE(levelValue->property("text").toString(), QString("+100 ms"));
+        QCOMPARE(subtitle->property("text").toString(), QString());
+        w->backend->seek(7050);
+        QCOMPARE(subtitle->property("text").toString(), QString("Then we walked."));
+        QTest::keyClick(w->window, Qt::Key_Z);
+        QCOMPARE(w->backend->subtitleDelay(), qint64(0));
+        QCOMPARE(levelValue->property("text").toString(), QString("0 ms"));
+        QCOMPARE(subtitle->property("text").toString(), QString());
         w->backend->seek(1500);
         shot(w.get(), "1-bare");
 

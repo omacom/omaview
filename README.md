@@ -65,6 +65,7 @@ The keys mean what fits what's shown: the arrows step through pictures and seek 
 | `↑` `↓` / `M` | Louder or quieter, up to 150% / mute |
 | `R` | Loop, or stop looping |
 | `C` / `A` | Next subtitles, or off / next audio track |
+| `Z` `X` | Subtitles earlier or later by 100 ms |
 | `Enter` | At the end of a file, play the next one |
 | `Ctrl+S` | Save the frame as a PNG |
 | `E` | Trim in Omacut |

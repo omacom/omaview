@@ -71,6 +71,7 @@ ApplicationWindow {
         { keys: "M", action: qsTr("Mute") },
         { keys: "R", action: qsTr("Loop, or stop looping") },
         { keys: "C", action: qsTr("Next subtitles, or off") },
+        { keys: "Z  X", action: qsTr("Subtitles earlier or later") },
         { keys: "A", action: qsTr("Next audio track") },
         { keys: "Ctrl+S", action: qsTr("Save the frame") },
         { keys: "E", action: qsTr("Trim in Omacut") }
@@ -119,9 +120,9 @@ ApplicationWindow {
             parts.push(Math.round(pictureView.ratio * 100).toLocaleString(Qt.locale(), 'f', 0) + "%")
         return parts.join("  ·  ")
     }
-    function showLevel(speed) {
+    function showLevel(kind) {
         levelOsd.message = ""
-        levelOsd.speed = speed
+        levelOsd.kind = kind
         levelOsd.shown = true
         levelTimer.restart()
     }
@@ -286,6 +287,7 @@ ApplicationWindow {
         function onPlayingChanged() { win.poke() }
         function onVolumeChanged() { win.poke() }
         function onRateChanged() { win.poke() }
+        function onSubtitleDelayChanged() { win.poke() }
         function onRotationChanged() { win.poke() }
     }
 
@@ -372,16 +374,26 @@ ApplicationWindow {
             backend.jumpChapter(1)
         }
     }
-    Shortcut { sequence: "["; enabled: win.playable; onActivated: { backend.changeRate(-0.25); win.showLevel(true) } }
-    Shortcut { sequence: "]"; enabled: win.playable; onActivated: { backend.changeRate(0.25); win.showLevel(true) } }
-    Shortcut { sequence: "Backspace"; enabled: win.playable; onActivated: { backend.resetRate(); win.showLevel(true) } }
-    Shortcut { sequence: "Up"; onActivated: win.picture ? win.arrow(0, -1) : (backend.changeVolume(0.05), win.showLevel(false)) }
-    Shortcut { sequence: "Down"; onActivated: win.picture ? win.arrow(0, 1) : (backend.changeVolume(-0.05), win.showLevel(false)) }
-    Shortcut { sequence: "M"; enabled: win.playable; onActivated: { backend.toggleMute(); win.showLevel(false) } }
+    Shortcut { sequence: "["; enabled: win.playable; onActivated: { backend.changeRate(-0.25); win.showLevel("speed") } }
+    Shortcut { sequence: "]"; enabled: win.playable; onActivated: { backend.changeRate(0.25); win.showLevel("speed") } }
+    Shortcut { sequence: "Backspace"; enabled: win.playable; onActivated: { backend.resetRate(); win.showLevel("speed") } }
+    Shortcut { sequence: "Up"; onActivated: win.picture ? win.arrow(0, -1) : (backend.changeVolume(0.05), win.showLevel("volume")) }
+    Shortcut { sequence: "Down"; onActivated: win.picture ? win.arrow(0, 1) : (backend.changeVolume(-0.05), win.showLevel("volume")) }
+    Shortcut { sequence: "M"; enabled: win.playable; onActivated: { backend.toggleMute(); win.showLevel("volume") } }
     Shortcut {
         sequence: "C"
         enabled: win.playable
         onActivated: backend.cycleSubtitles()
+    }
+    Shortcut {
+        sequence: "Z"
+        enabled: win.playable && backend.subtitleLabel !== ""
+        onActivated: if (backend.changeSubtitleDelay(-100)) win.showLevel("subtitleDelay")
+    }
+    Shortcut {
+        sequence: "X"
+        enabled: win.playable && backend.subtitleLabel !== ""
+        onActivated: if (backend.changeSubtitleDelay(100)) win.showLevel("subtitleDelay")
     }
     Shortcut {
         sequence: "A"
@@ -654,7 +666,7 @@ ApplicationWindow {
                 if (steps === 0)
                     return
                 backend.changeVolume(0.05 * steps)
-                win.showLevel(false)
+                win.showLevel("volume")
             }
         }
         // The pointer hides after a second of stillness.
@@ -765,13 +777,13 @@ ApplicationWindow {
             onTriggered: cornerOsd.shown = win.playable && (!backend.playing || backend.loading)
         }
 
-        // The volume and the speed, the changes a key makes that show:
-        // briefly, in the middle.
+        // The volume, the speed and the subtitle delay, the changes a key
+        // makes that show: briefly, in the middle.
         Rectangle {
             id: levelOsd
             objectName: "levelOsd"
             property bool shown: false
-            property bool speed: false
+            property string kind: "volume"
             property string message
             visible: opacity > 0
             opacity: shown ? 1 : 0
@@ -800,8 +812,11 @@ ApplicationWindow {
                     objectName: "levelValue"
                     visible: levelOsd.message === ""
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: levelOsd.speed
+                    text: levelOsd.kind === "speed"
                           ? backend.rate.toLocaleString(Qt.locale(), 'f', backend.rate * 4 % 4 === 0 ? 0 : 2) + "×"
+                          : levelOsd.kind === "subtitleDelay"
+                          ? qsTr("%1 ms").arg((backend.subtitleDelay > 0 ? "+" : "")
+                                              + backend.subtitleDelay.toLocaleString(Qt.locale(), 'f', 0))
                           : backend.muted ? qsTr("Muted")
                           : Math.round(backend.volume * 100).toLocaleString(Qt.locale(), 'f', 0) + "%"
                     color: theme.accent
@@ -811,7 +826,9 @@ ApplicationWindow {
                 Text {
                     visible: levelOsd.message === ""
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: levelOsd.speed ? qsTr("Speed") : qsTr("Volume")
+                    text: levelOsd.kind === "speed" ? qsTr("Speed")
+                          : levelOsd.kind === "subtitleDelay" ? qsTr("Subtitle delay")
+                          : qsTr("Volume")
                     color: theme.colors.muted
                     font.pixelSize: 13
                 }

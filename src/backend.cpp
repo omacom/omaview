@@ -557,6 +557,7 @@ void Backend::resetFile() {
     m_cues.clear();
     m_embeddedText.clear();
     m_subtitleText.clear();
+    m_subtitleDelay = 0;
     m_audioLabels.clear();
     m_audioLanguages.clear();
     m_audioTrack = -1;
@@ -726,6 +727,7 @@ void Backend::emitFileChanged() {
     emit statusChanged();
     emit playingChanged();
     emit subtitleTextChanged();
+    emit subtitleDelayChanged();
     emit tracksChanged();
     emit chapterChanged();
     emit infoChanged();
@@ -963,6 +965,8 @@ void Backend::applySubtitle(int index, bool remember) {
     m_subtitleChoice = index >= 0 && index < m_subtitleChoices.size() ? index : -1;
     m_cues.clear();
     m_embeddedText.clear();
+    const bool delayChanged = m_subtitleDelay != 0;
+    m_subtitleDelay = 0;
     if (m_subtitleChoice < 0) {
         m_player->setActiveSubtitleTrack(-1);
         if (remember)
@@ -979,6 +983,8 @@ void Backend::applySubtitle(int index, bool remember) {
             setPreference("subtitleLanguage", choice.language);
     }
     updateSubtitleText();
+    if (delayChanged)
+        emit subtitleDelayChanged();
     emit tracksChanged();
 }
 
@@ -1033,7 +1039,9 @@ void Backend::updateSubtitleText() {
     QString text;
     if (m_subtitleChoice >= 0 && m_subtitleChoice < m_subtitleChoices.size()) {
         const SubtitleChoice &choice = m_subtitleChoices.at(m_subtitleChoice);
-        text = choice.sidecar >= 0 || choice.cuesLoaded ? subtitles::at(m_cues, m_position) : m_embeddedText;
+        text = choice.sidecar >= 0 || choice.cuesLoaded
+                   ? subtitles::at(m_cues, m_position - m_subtitleDelay)
+                   : m_embeddedText;
     }
     if (text != m_subtitleText) {
         m_subtitleText = text;
@@ -1384,6 +1392,31 @@ void Backend::cycleSubtitles() {
     // Off, then each choice, then off again.
     const int next = m_subtitleChoice + 1 >= m_subtitleChoices.size() ? -1 : m_subtitleChoice + 1;
     applySubtitle(next, true);
+}
+
+bool Backend::changeSubtitleDelay(qint64 deltaMs) {
+    if (m_subtitleChoice < 0 || m_subtitleChoice >= m_subtitleChoices.size())
+        return false;
+    const SubtitleChoice &choice = m_subtitleChoices.at(m_subtitleChoice);
+    if (!choice.cuesLoaded) {
+        emit notice(choice.cuesLoading ? tr("Subtitles are still loading.")
+                                       : tr("Subtitle timing can't be adjusted for this track."));
+        return false;
+    }
+    constexpr qint64 limit = 60 * 60 * 1000;
+    m_subtitleDelay = std::clamp(m_subtitleDelay + std::clamp(deltaMs, -limit, limit), -limit, limit);
+    updateSubtitleText();
+    emit subtitleDelayChanged();
+    return true;
+}
+
+void Backend::resetSubtitleDelay() {
+    if (m_subtitleChoice < 0 || m_subtitleChoice >= m_subtitleChoices.size()
+        || !m_subtitleChoices.at(m_subtitleChoice).cuesLoaded)
+        return;
+    m_subtitleDelay = 0;
+    updateSubtitleText();
+    emit subtitleDelayChanged();
 }
 
 void Backend::cycleAudio() {

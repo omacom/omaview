@@ -70,6 +70,7 @@ class Backend : public QObject {
     Q_PROPERTY(QString error READ error NOTIFY errorChanged)
     Q_PROPERTY(bool stopped READ stopped NOTIFY playingChanged)
     Q_PROPERTY(QString subtitleText READ subtitleText NOTIFY subtitleTextChanged)
+    Q_PROPERTY(qint64 subtitleDelay READ subtitleDelay NOTIFY subtitleDelayChanged)
     Q_PROPERTY(QString subtitleLabel READ subtitleLabel NOTIFY tracksChanged)
     Q_PROPERTY(int subtitleChoices READ subtitleChoices NOTIFY tracksChanged)
     Q_PROPERTY(QString audioLabel READ audioLabel NOTIFY tracksChanged)
@@ -133,6 +134,7 @@ public:
     QString error() const;
     bool stopped() const { return m_stopped; }
     QString subtitleText() const { return m_subtitleText; }
+    qint64 subtitleDelay() const { return m_subtitleDelay; }
     QString subtitleLabel() const;
     int subtitleChoices() const { return int(m_subtitleChoices.size()); }
     QString audioLabel() const;
@@ -180,6 +182,8 @@ public:
     // Plays the file over and over, and every file after it, until turned off.
     Q_INVOKABLE void toggleLoop();
     Q_INVOKABLE void cycleSubtitles();
+    Q_INVOKABLE bool changeSubtitleDelay(qint64 deltaMs);
+    Q_INVOKABLE void resetSubtitleDelay();
     Q_INVOKABLE void cycleAudio();
     Q_INVOKABLE bool next();
     Q_INVOKABLE bool previous();
@@ -245,6 +249,7 @@ signals:
     void rateChanged();
     void errorChanged();
     void subtitleTextChanged();
+    void subtitleDelayChanged();
     void tracksChanged();
     void chapterChanged();
     void infoChanged();
@@ -385,6 +390,7 @@ private:
     QList<subtitles::Cue> m_cues;
     QString m_embeddedText;
     QString m_subtitleText;
+    qint64 m_subtitleDelay = 0;
     QStringList m_audioLabels;
     QStringList m_audioLanguages;
     int m_audioTrack = -1;
