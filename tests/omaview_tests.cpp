@@ -12,6 +12,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QMediaPlayer>
+#include <QMimeDatabase>
 #include <QProcess>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -365,6 +366,40 @@ private slots:
             cNames << QFileInfo(path).fileName();
         QLocale::setDefault(savedLocale);
         QCOMPARE(cNames, (QStringList{"cover.jpg", "Episode 1.mp4", "episode 2.mkv", "Episode 10.mkv", "song.flac"}));
+    }
+
+    // xdg-open looks a file's type up by its canonical name and doesn't follow
+    // aliases, so a .wav reported as audio/vnd.wave skips an entry that lists
+    // only audio/x-wav and opens in whatever claims the canonical name.
+    void desktopEntryClaimsTheTypesItPlays() {
+        QFile entry(OMAVIEW_DESKTOP_FILE);
+        QVERIFY(entry.open(QIODevice::ReadOnly));
+        QStringList claimed;
+        for (const QString &line : QString::fromUtf8(entry.readAll()).split('\n'))
+            if (line.startsWith("MimeType="))
+                claimed = line.mid(9).split(';', Qt::SkipEmptyParts);
+        QVERIFY(!claimed.isEmpty());
+        const QMimeDatabase db;
+        QStringList missing;
+        for (const QMimeType &type : db.allMimeTypes()) {
+            for (const QString &glob : type.globPatterns()) {
+                if (!glob.startsWith("*.") || glob.mid(2).contains('*'))
+                    continue;
+                const QString name = "f" + glob.mid(1);
+                const playlist::Kind kind = playlist::kind(name);
+                if (kind != playlist::Kind::Video && kind != playlist::Kind::Audio)
+                    continue;
+                // The type a file manager reports for the name, unless that's
+                // text: by name alone a .ts is a Qt translation, not a stream.
+                const QString reported = db.mimeTypeForFile(name, QMimeDatabase::MatchExtension).name();
+                if (reported.startsWith("text/"))
+                    continue;
+                if (!claimed.contains(reported) && !missing.contains(reported))
+                    missing << reported;
+            }
+        }
+        missing.sort();
+        QVERIFY2(missing.isEmpty(), qPrintable("not in MimeType: " + missing.join(' ')));
     }
 
     void songsAndPicturesDontMix() {

@@ -47,6 +47,7 @@ target_link_libraries(omaview PRIVATE omaview_core)
 enable_testing()
 add_executable(omaview_tests tests/omaview_tests.cpp src/resources.qrc)
 target_link_libraries(omaview_tests PRIVATE omaview_core Qt6::Test)
+target_compile_definitions(omaview_tests PRIVATE OMAVIEW_DESKTOP_FILE="${CMAKE_SOURCE_DIR}/share/omaview.desktop")
 add_test(NAME omaview_tests COMMAND omaview_tests)
 set_tests_properties(omaview_tests PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
 
